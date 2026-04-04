@@ -28,5 +28,5 @@
 
 <details>
   <summary>But for real though...</summary>
-  **APRIL FOOLS!!**<br> We didnt actually write a super fancy algorithm for calculating your name. This is just where we see how gullible people really are. Did you fall for it?
+  <strong>APRIL FOOLS!!</strong><br> We didnt actually write a super fancy algorithm for calculating your name. This is just where we see how gullible people really are. Did you fall for it?
 </details>
