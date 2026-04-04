@@ -23,3 +23,10 @@
 ### Our Equation
 <p align="center"><img src="./src/assets/equation.png"></p>
 <p align="center">Our equation scores each possible name (the ‘n’ variable) by computing a weighted sum of Markov transition probabilities across the input sequence. The most important part is the ‘P(s_i | s_{i-1})’. Basically it gives the likelihood of each observed state given the previous one. λᵢ weights each step by its predictive relevance. The result is then projected onto vₙ, (a name-specific probability vector) and the highest-scoring candidate is returned as the prediction. So in summary, it guesses until it gets it right, but after each guess it gets smarter. (Because of the λᵢ loss property)</p>
+
+<hr>
+
+<details>
+  <summary>But for real though...</summary>
+  **APRIL FOOLS!!**<br> We didnt actually write a super fancy algorithm for calculating your name. This is just where we see how gullible people really are. Did you fall for it?
+</details>
