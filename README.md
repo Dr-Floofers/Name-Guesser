@@ -1,1 +1,1 @@
-<img src="./src/assets/logo.svg">
+<div style="justify-content:center;"><img src="./src/assets/logo-github.png"></div>
