@@ -1,17 +1,14 @@
 <script lang="ts">
-  import {
-    getAllSessions, upsertSession,
-    getStatusLabel, getStatusColor, CHANNEL_NAME,
-    type QuizSession, type ChannelMessage
-  } from './session'
+  import { getStatusLabel, getStatusColor, type QuizSession } from './session'
+  import { db } from './firebase'
+  import { ref, set, onValue, onDisconnect } from 'firebase/database'
 
   const STALE_MS = 5 * 60 * 1000
   const HEARTBEAT_INTERVAL = 3000
 
-  let sessions = $state<QuizSession[]>(getAllSessions())
+  let sessions = $state<QuizSession[]>([])
   let nameInputs = $state<Record<string, string>>({})
   let signals = $state(new Set<string>())
-  const signalTimeouts: Record<string, ReturnType<typeof setTimeout>> = {}
 
   function isStale(session: QuizSession): boolean {
     return Date.now() - session.lastSeen > STALE_MS
@@ -25,63 +22,30 @@
     }
   }
 
-  syncInputs(getAllSessions())
+  onValue(ref(db, 'sessions'), (snapshot) => {
+    const data = snapshot.val()
+    const updated: QuizSession[] = data ? Object.values(data) : []
+    syncInputs(updated)
+    sessions = updated
+  })
 
-  const channel = new BroadcastChannel(CHANNEL_NAME)
+  onValue(ref(db, 'signals'), (snapshot) => {
+    const data = snapshot.val()
+    signals = new Set(data ? Object.keys(data) : [])
+  })
 
   function sendHeartbeat() {
-    channel.postMessage({ type: 'adminPresence' } satisfies ChannelMessage)
+    set(ref(db, 'admin/lastSeen'), Date.now())
   }
-
   sendHeartbeat()
   setInterval(sendHeartbeat, HEARTBEAT_INTERVAL)
 
-  channel.postMessage({ type: 'adminJoined' } satisfies ChannelMessage)
-
-  window.addEventListener('beforeunload', () => {
-    channel.postMessage({ type: 'adminGone' } satisfies ChannelMessage)
-  })
-
-  channel.addEventListener('message', (e: MessageEvent<ChannelMessage>) => {
-    const msg = e.data
-
-    if (msg.type === 'sessionUpdate' || msg.type === 'sessionEnd') {
-      const updated = getAllSessions()
-      syncInputs(updated)
-      sessions = updated
-
-    } else if (msg.type === 'adminPing') {
-      sendHeartbeat()
-
-    } else if (msg.type === 'signal') {
-      if (signalTimeouts[msg.sessionId]) clearTimeout(signalTimeouts[msg.sessionId])
-      signalTimeouts[msg.sessionId] = setTimeout(() => {
-        signals = new Set([...signals].filter(id => id !== msg.sessionId))
-        delete signalTimeouts[msg.sessionId]
-      }, 5000)
-      signals = new Set([...signals, msg.sessionId])
-
-    } else if (msg.type === 'signalOff') {
-      if (signalTimeouts[msg.sessionId]) clearTimeout(signalTimeouts[msg.sessionId])
-      delete signalTimeouts[msg.sessionId]
-      signals = new Set([...signals].filter(id => id !== msg.sessionId))
-    }
-  })
-
-  setInterval(() => {
-    const updated = getAllSessions()
-    syncInputs(updated)
-    sessions = updated
-  }, 5000)
+  onDisconnect(ref(db, 'admin/lastSeen')).remove()
 
   function setName(sessionId: string) {
     const name = (nameInputs[sessionId] ?? '').trim() || 'John Smith'
-    const session = sessions.find(s => s.id === sessionId)
-    if (!session) return
     const nameOverride = name === 'John Smith' ? null : name
-    upsertSession({ ...session, nameOverride })
-    sessions = getAllSessions()
-    channel.postMessage({ type: 'nameUpdate', sessionId, name: nameOverride } satisfies ChannelMessage)
+    set(ref(db, `sessions/${sessionId}/nameOverride`), nameOverride)
   }
 
   function shortId(id: string) {

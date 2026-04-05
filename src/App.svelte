@@ -4,7 +4,9 @@
   import Question from './lib/QuizQuestion.svelte';
   import TextQuestion from './lib/QuizTextQuestion.svelte';
   import { startRocking, playStartScreenExit, newRandQM, popAllQMs, startConfetti, stopConfetti, playDrumRoll, playTaDa } from './main'
-  import { getSessionId, getAllSessions, upsertSession, deleteSession, CHANNEL_NAME, type ChannelMessage } from './session'
+  import { getSessionId } from './session'
+  import { db } from './firebase'
+  import { ref, set, remove, update, onValue, onDisconnect } from 'firebase/database'
 
   let started = $state(false)
   let showDrumRoll = $state(false)
@@ -14,12 +16,9 @@
   let questionIndex = $state(0)
 
   const sessionId = getSessionId()
-  const existingSession = getAllSessions().find(s => s.id === sessionId)
-  const sessionCreatedAt = existingSession?.createdAt ?? Date.now()
-  let nameOverride = $state<string | null>(existingSession?.nameOverride ?? null)
+  const sessionCreatedAt = Date.now()
+  let nameOverride = $state<string | null>(null)
   let displayName = $derived(nameOverride ?? 'John Smith')
-
-  const channel = new BroadcastChannel(CHANNEL_NAME)
 
   let adminOnline = $state(false)
   let adminTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -31,63 +30,52 @@
     adminTimeoutId = setTimeout(() => { adminOnline = false }, ADMIN_TIMEOUT_MS)
   }
 
-  channel.postMessage({ type: 'adminPing' } satisfies ChannelMessage)
-
-  channel.addEventListener('message', (e: MessageEvent<ChannelMessage>) => {
-    if (e.data.type === 'nameUpdate' && e.data.sessionId === sessionId) {
-      nameOverride = e.data.name
-    } else if (e.data.type === 'adminPresence') {
+  onValue(ref(db, 'admin/lastSeen'), (snapshot) => {
+    if (snapshot.exists()) {
       resetAdminTimer()
-    } else if (e.data.type === 'adminGone') {
+    } else {
       if (adminTimeoutId) clearTimeout(adminTimeoutId)
       if (!started) adminOnline = false
-    } else if (e.data.type === 'adminJoined') {
-      channel.postMessage({ type: 'sessionUpdate', sessionId } satisfies ChannelMessage)
     }
   })
 
-  setInterval(() => {
-    const current = getAllSessions().find(s => s.id === sessionId)
-    if (current) {
-      upsertSession({ ...current, lastSeen: Date.now() })
-      channel.postMessage({ type: 'sessionUpdate', sessionId } satisfies ChannelMessage)
-    }
-  }, 30_000)
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === '=' && !e.repeat &&
-        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-      channel.postMessage({ type: 'signal', sessionId } satisfies ChannelMessage)
-    }
-  })
-  window.addEventListener('keyup', (e) => {
-    if (e.key === '=') {
-      channel.postMessage({ type: 'signalOff', sessionId } satisfies ChannelMessage)
-    }
+  onValue(ref(db, `sessions/${sessionId}/nameOverride`), (snapshot) => {
+    nameOverride = snapshot.val()
   })
 
-  window.addEventListener('beforeunload', () => {
-    deleteSession(sessionId)
-    channel.postMessage({ type: 'sessionEnd', sessionId } satisfies ChannelMessage)
-    channel.close()
-  })
+  onDisconnect(ref(db, `sessions/${sessionId}`)).remove()
+  onDisconnect(ref(db, `signals/${sessionId}`)).remove()
 
   $effect(() => {
-    upsertSession({
+    update(ref(db, `sessions/${sessionId}`), {
       id: sessionId,
       createdAt: sessionCreatedAt,
       lastSeen: Date.now(),
       questionIndex,
       started,
       showDrumRoll,
-      showResult,
-      nameOverride
+      showResult
     })
-    channel.postMessage({ type: 'sessionUpdate', sessionId } satisfies ChannelMessage)
   })
+
+  setInterval(() => {
+    set(ref(db, `sessions/${sessionId}/lastSeen`), Date.now())
+  }, 30_000)
 
   $effect(() => {
     if (!started && logoImg) startRocking(logoImg)
+  })
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '=' && !e.repeat &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      set(ref(db, `signals/${sessionId}`), true)
+    }
+  })
+  window.addEventListener('keyup', (e) => {
+    if (e.key === '=') {
+      remove(ref(db, `signals/${sessionId}`))
+    }
   })
 
   function start() {
@@ -109,8 +97,6 @@
         setTimeout(() => {
           showDrumRoll = true
           playDrumRoll(() => {
-            const latest = getAllSessions().find(s => s.id === sessionId)
-            if (latest?.nameOverride !== undefined) nameOverride = latest.nameOverride
             showResult = true
             startConfetti()
             playTaDa()
