@@ -171,14 +171,14 @@
   />
 {:else if questionIndex === 6}
   <Question
-    title="Which type of cheese is better?"
-    answers={["Yellow", "White", "Moldy", "I dont eat cheese 😏🤥"]}
+    title="Is there a letter 's' in your name?"
+    answers={["Yes", "No"]}
     {onAnswer}
   />
 {:else if questionIndex === 7}
   <Question
-    title="What's your favorite Family Guy character?"
-    answers={["Peter", "Quagmire", "Cleveland", "Joe"]}
+    title="What's your favorite letter?"
+    answers={["A", "B", "C", "D"]}
     {onAnswer}
   />
 {:else if questionIndex === 8}
@@ -189,12 +189,12 @@
   />
 {:else if questionIndex === 9}
   <TextQuestion
-    title="If you got a pet parrot what would its name be?"
+    title="If you got a pet, what would its name be?"
     {onAnswer}
   />
 {:else if questionIndex === 10}
   <Question
-    title="Do you have carpet in your bedroom?"
+    title="Is your name more than 5 letters?"
     answers={["Yes", "No"]}
     {onAnswer}
   />
